@@ -272,18 +272,49 @@ def render_prestamos():
         )
 
     if accion=="Consultar":
-        c1,c2=st.columns(2); modo=c1.selectbox("Filtrar por fecha de préstamo", ["Todos","Antes de","En","Después de"]); fref=c2.date_input("Fecha de referencia", value=date.today())
-        df=prestamos.copy()
+        c1, c2 = st.columns(2)
+        modo = c1.selectbox("Filtrar por fecha de préstamo", ["Todos","Antes de","En","Después de"])
+        fref = c2.date_input("Fecha de referencia", value=date.today())
+
+        df = prestamos.copy()
+
         if not df.empty:
-            if modo=="Antes de": df=df[df["Fecha del préstamo"]<pd.to_datetime(fref)]
-            elif modo=="En": df=df[df["Fecha del préstamo"]==pd.to_datetime(fref)]
-            elif modo=="Después de": df=df[df["Fecha del préstamo"]>pd.to_datetime(fref)]
-            st.dataframe(df.style.apply(lambda s: ["background-color:#ffd6d6" if (v==True) else "" for v in s["Fuera de plazo"]], axis=1),
-                        use_container_width=True)
+            # Asegurar tipos de fecha y la columna booleana
+            df["Fecha del préstamo"]       = pd.to_datetime(df["Fecha del préstamo"], errors="coerce")
+            df["Fecha de devolución"]      = pd.to_datetime(df["Fecha de devolución"], errors="coerce")
+            df["Fecha de devolución real"] = pd.to_datetime(df["Fecha de devolución real"], errors="coerce")
+            df["Fuera de plazo"] = df["Fuera de plazo"].fillna(False).astype(bool)
+
+            # Filtro por fecha de préstamo
+            if modo == "Antes de":
+                df = df[df["Fecha del préstamo"] < pd.to_datetime(fref)]
+            elif modo == "En":
+                df = df[df["Fecha del préstamo"] == pd.to_datetime(fref)]
+            elif modo == "Después de":
+                df = df[df["Fecha del préstamo"] > pd.to_datetime(fref)]
+
+            # Columna visual en lugar de Styler
+            df_mostrar = df.copy()
+            df_mostrar["⚠️ Fuera de plazo"] = df_mostrar["Fuera de plazo"].map(lambda v: "Sí" if bool(v) else "—")
+
+            # Orden opcional de columnas
+            cols = [
+                "ISBN","Id_usuario","Fecha del préstamo","Fecha de devolución",
+                "Fecha de devolución real","Estado en que se devuelve","Notas","⚠️ Fuera de plazo"
+            ]
+            # Mantén solo columnas que existan
+            cols = [c for c in cols if c in df_mostrar.columns]
+            df_mostrar = df_mostrar[cols]
+
+            st.dataframe(df_mostrar, use_container_width=True)
+
+            # Exportación
             if st.session_state.get("trigger_export", False):
-                export_section("Préstamos", df); st.session_state["trigger_export"]=False
+                export_section("Préstamos", df)  # exporta el DF real (incluye booleano)
+                st.session_state["trigger_export"] = False
         else:
             st.info("No hay préstamos.")
+
 
     elif accion=="Alta":
         with st.form("alta_prestamo"):
